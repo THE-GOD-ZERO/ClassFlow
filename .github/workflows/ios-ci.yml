@@ -1,0 +1,220 @@
+name: iOS CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Print Apple toolchain and simulators
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ClassFlowDiagnostics"
+          exec > >(tee "$RUNNER_TEMP/ClassFlowDiagnostics/environment.log") 2>&1
+          sw_vers
+          xcodebuild -version
+          swift --version
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+
+      - name: Detect Xcode container and shared scheme
+        id: xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          workspaces=(./*.xcworkspace)
+          projects=(./*.xcodeproj)
+          if (( ${#workspaces[@]} > 1 || (${#workspaces[@]} == 0 && ${#projects[@]} > 1) )); then
+            echo "Multiple Xcode containers found; explicitly select the intended container." >&2
+            exit 1
+          fi
+          workspace="${workspaces[0]:-}"
+          project="${projects[0]:-}"
+          if [[ -n "$workspace" ]]; then
+            kind="workspace"
+            path="$workspace"
+            xcodebuild -workspace "$path" -list -json > "$RUNNER_TEMP/xcode-list.json"
+          elif [[ -n "$project" ]]; then
+            kind="project"
+            path="$project"
+            xcodebuild -project "$path" -list -json > "$RUNNER_TEMP/xcode-list.json"
+          else
+            echo "No top-level .xcworkspace or .xcodeproj was found." >&2
+            exit 1
+          fi
+
+          cat "$RUNNER_TEMP/xcode-list.json"
+          cp "$RUNNER_TEMP/xcode-list.json" "$RUNNER_TEMP/ClassFlowDiagnostics/"
+          scheme="$(python3 - "$RUNNER_TEMP/xcode-list.json" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          container = data.get("workspace") or data.get("project") or {}
+          schemes = container.get("schemes") or []
+          if not schemes:
+              raise SystemExit("xcodebuild -list returned no shared schemes")
+          if "ClassFlow" in schemes:
+              print("ClassFlow")
+          elif len(schemes) == 1:
+              print(schemes[0])
+          else:
+              raise SystemExit("Ambiguous scheme list; select a shared build/test scheme explicitly")
+          PY
+          )"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "path=${path#./}" >> "$GITHUB_OUTPUT"
+          echo "scheme=$scheme" >> "$GITHUB_OUTPUT"
+          echo "Using $kind ${path#./} with scheme $scheme"
+
+      - name: Verify project and design contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-structure.mjs
+          node scripts/verify-design-system.mjs
+          node scripts/verify-project.mjs
+          python3 scripts/verify_structure.py
+          plutil -lint ClassFlow.xcodeproj/project.pbxproj ClassFlow/Resources/Info.plist
+
+      - name: Clean and build for a generic iOS Simulator
+        id: build
+        shell: bash
+        env:
+          CONTAINER_KIND: ${{ steps.xcode.outputs.kind }}
+          CONTAINER_PATH: ${{ steps.xcode.outputs.path }}
+          SCHEME: ${{ steps.xcode.outputs.scheme }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONTAINER_KIND" == "workspace" ]]; then
+            container_args=(-workspace "$CONTAINER_PATH")
+          else
+            container_args=(-project "$CONTAINER_PATH")
+          fi
+          xcodebuild "${container_args[@]}" -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/ClassFlowDiagnostics/Build.xcresult" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            clean build 2>&1 | tee "$RUNNER_TEMP/ClassFlowDiagnostics/build.log"
+
+      - name: Run portable core tests after build
+        id: core
+        shell: bash
+        run: |
+          set -euo pipefail
+          swift test --parallel 2>&1 | tee "$RUNNER_TEMP/ClassFlowDiagnostics/core-tests.log"
+
+      - name: Select an available iPhone Simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/simulators.json"
+          python3 - "$RUNNER_TEMP/simulators.json" "$GITHUB_OUTPUT" <<'PY'
+          import json, re, sys
+
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          candidates = []
+          for runtime, devices in data.get("devices", {}).items():
+              match = re.search(r"\.iOS-(\d+)(?:-(\d+))?", runtime)
+              if not match:
+                  continue
+              version = tuple(int(part or 0) for part in match.groups())
+              if version < (17, 0):
+                  continue
+              for order, device in enumerate(devices):
+                  identifier = device.get("deviceTypeIdentifier", "")
+                  if device.get("isAvailable") and "iPhone" in identifier:
+                      candidates.append((version, device.get("state") == "Booted", -order,
+                                         device["udid"], device["name"], device.get("state", "Shutdown")))
+          if not candidates:
+              raise SystemExit("No available iPhone Simulator was found on this runner")
+          version, _, _, udid, name, state = max(candidates)
+          with open(sys.argv[2], "a", encoding="utf-8") as output:
+              output.write(f"udid={udid}\nname={name}\nstate={state}\n")
+          print(f"Selected {name} ({udid}), iOS {'.'.join(map(str, version))}, state={state}")
+          PY
+
+      - name: Boot selected Simulator
+        shell: bash
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+          SIMULATOR_STATE: ${{ steps.simulator.outputs.state }}
+        run: |
+          set -euo pipefail
+          if [[ "$SIMULATOR_STATE" != "Booted" ]]; then
+            xcrun simctl boot "$SIMULATOR_UDID"
+          fi
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+
+      - name: Run XCTest on selected Simulator
+        id: tests
+        shell: bash
+        env:
+          CONTAINER_KIND: ${{ steps.xcode.outputs.kind }}
+          CONTAINER_PATH: ${{ steps.xcode.outputs.path }}
+          SCHEME: ${{ steps.xcode.outputs.scheme }}
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONTAINER_KIND" == "workspace" ]]; then
+            container_args=(-workspace "$CONTAINER_PATH")
+          else
+            container_args=(-project "$CONTAINER_PATH")
+          fi
+          xcodebuild "${container_args[@]}" -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/ClassFlowDiagnostics/Tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test 2>&1 | tee "$RUNNER_TEMP/ClassFlowDiagnostics/xctest.log"
+
+      - name: Upload diagnostics (non-blocking)
+        id: artifacts
+        if: always()
+        # Only transport is best-effort. Build and test failures remain fatal.
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ClassFlow-diagnostics
+          path: ${{ runner.temp }}/ClassFlowDiagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize validation outcomes
+        if: always()
+        shell: bash
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          CORE_OUTCOME: ${{ steps.core.outcome }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          ARTIFACT_OUTCOME: ${{ steps.artifacts.outcome }}
+        run: |
+          {
+            echo '## ClassFlow validation gate'
+            echo "- Simulator build: $BUILD_OUTCOME"
+            echo "- Core XCTest: $CORE_OUTCOME"
+            echo "- iOS XCTest: $TEST_OUTCOME"
+            echo "- Diagnostic upload: $ARTIFACT_OUTCOME"
+            echo 'Executed/Passed/Failed/Skipped counts must be read from XCTest logs or xcresult; source inventory is not execution evidence.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$ARTIFACT_OUTCOME" == "failure" ]]; then
+            echo '::warning::Diagnostic upload failed; inspect build/test step outcomes and retained Actions console logs.'
+          fi

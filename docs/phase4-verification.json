@@ -1,0 +1,19 @@
+{
+  "phase": "4",
+  "environment": "Windows; no Swift/Xcode",
+  "xctestMethodsDefined": 189,
+  "xctestMethodsExecuted": 0,
+  "newXCTestMethods": 54,
+  "newPreviewDeclarations": 21,
+  "macOSCI": "not run; directory has no .git",
+  "scope": "Course management; no Schema or Resolver changes",
+  "files": {
+    "ClassFlow/Models/Course.swift": "d66625869739e53b1669279f618f875d677ed34988495ccbc300c2bb05dadd7b",
+    "ClassFlow/Models/CourseSchedule.swift": "9f8cb124dd92d4c9531d40cf73aca81c882abeabf6556ce66503c423b5af3bc0",
+    "ClassFlow/Models/Semester.swift": "1ba30db2b236818ed40597c4d971b8813b154c6a9936361d16675670bcc0c7c2",
+    "ClassFlow/Models/ClassTimeSlot.swift": "add0c871b09f7ddd19d93eec95593bd7b7e5774ad4930854fc82edff81562224",
+    "ClassFlow/Models/ScheduleOverride.swift": "a6f680e03462a5412d3768f67cb9e03fe679982fc79ae09cf36cc49686927685",
+    "ClassFlow/Core/Schedule/ScheduleResolver.swift": "585e03a65b18101fc7c2d268aabca0d85222331c823189cc9bf85aeef04a604d",
+    ".github/workflows/ios-ci.yml": "f35b3808f9273bbb42ebddf06d8ea311be926a3640fff8c9e7fa0781b6bfe0bb"
+  }
+}
