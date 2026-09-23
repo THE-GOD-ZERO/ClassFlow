@@ -56,3 +56,15 @@ Windows 已执行：project generator、verify-structure、verify-design-system�
 Python launcher 存在，但没有安装 Python runtime，原 `verify_structure.py` 在 Windows 未能执行；等效的工程对象/Target 核对已由新增 Node 验证器执行，CI 将运行两者。当前没有 Swift 或 Xcode；macOS Build、XCTest、Simulator、真机均 **Not run**。没有 GitHub remote，不能触发真实 CI。实时状态见根目录 `CI_STATUS.md`。
 
 下一步由用户创建或提供 GitHub 仓库，连接并 push。无需 Apple 证书即可跑 Simulator CI。观察 Actions → iOS CI；失败时提供失败步骤日志或下载 ClassFlow-diagnostics。不要把本地结构验证或 193 个定义方法视作 Gate 已真实通过。
+
+## CI 第三轮：Preview 编译修复与辅助功能复核
+
+以上“未执行”记录属于最初本地准备阶段；最新实际运行结果见 `CI_STATUS.md`。现已连接远程并执行三轮 CI，Windows 也已通过随工具提供的 Python runtime 运行原验证器。
+
+第三轮 Preflight 通过，Build 的首个错误为 Preview 对只读 `accessibilityReduceMotion` / `colorSchemeContrast` 使用 `.environment` 写入。仅修改两处 Preview 配置，保留所有预览场景和生产 `@Environment` 读取；没有伪造可写环境键或更改动画策略。
+
+- Courses：辅助功能场景继续使用原课程列表。在 Simulator 的系统设置中启用“辅助功能 → 动态效果 → 减弱动态效果”和“显示与文字大小 → 增强对比度”后核验；预览名称明确标注跟随系统设置。
+- Schedule：冲突课程辅助功能场景同样跟随系统。小屏场景改用 320×568 fixedLayout trait（仅预览尺寸），消除被 `#Preview` 忽略的 previewDevice 配置；实际设备仍通过 Canvas 设备选择器选择。
+- 静态复核：页面布局、间距、字体、颜色和触控区未改；Dark Mode / Dynamic Type 场景保留。无新增计时器、查询或生产计算。辅助功能与小屏效果尚未在 Canvas、Simulator 或真机上视觉验证。
+
+本轮未修改 XCTest、SwiftData Schema、ScheduleResolver 或 CI Build/Test 失败策略。修复后的 macOS 编译仍待用户推送触发，不能把本地结构检查当作通过编译。

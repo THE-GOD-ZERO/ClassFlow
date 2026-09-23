@@ -17,6 +17,9 @@ for (const p of views) {
   assert(!/\.font\(\./.test(s), `Unscoped font: ${p}`);
   assert(!/\bAnyView\b|GeometryReader|\.blur\(/.test(s), `Expensive UI shortcut: ${p}`);
   assert(!/\.frame\(width:[^\n]*minHeight:/.test(s), `Invalid frame overload: ${p}`);
+  const code = s.replace(/"(?:\\.|[^"\\])*"|\/\/[^\n]*|\/\*[^]*?\*\//g, '');
+  assert(!/\.environment\s*\(\s*\\\.(?:accessibilityReduceMotion|colorSchemeContrast)\b/.test(code),
+    `Cannot write read-only system accessibility environment values: ${p}`);
 }
 const colors=read('ClassFlow/DesignSystem/AppColors.swift');
 const pairs=[...colors.matchAll(/pair = \(0x([A-F0-9]+), 0x([A-F0-9]+)\)/g)];

@@ -36,8 +36,8 @@ private struct WeekSchedulePreviewHost: View {
 #Preview("深色模式") {
     WeekSchedulePreviewHost(scenario: .ordinary).preferredColorScheme(.dark)
 }
-#Preview("小尺寸 iPhone") {
-    WeekSchedulePreviewHost(scenario: .dense).previewDevice("iPhone SE (3rd generation)")
+#Preview("小尺寸 iPhone", traits: .fixedLayout(width: 320, height: 568)) {
+    WeekSchedulePreviewHost(scenario: .dense)
 }
 #Preview("大字体") {
     WeekSchedulePreviewHost(scenario: .ordinary).environment(\.dynamicTypeSize, .accessibility2)
@@ -49,9 +49,9 @@ private struct WeekSchedulePreviewHost: View {
 #Preview("长文字 · 大屏", traits: .fixedLayout(width: 430, height: 932)) {
     WeekSchedulePreviewHost(scenario: .longText)
 }
-#Preview("减少动态效果 · 高对比") {
+#Preview("辅助功能 · 跟随系统设置") {
+    // Read-only accessibility environment values come from the system. Review
+    // with Reduce Motion and Increase Contrast enabled on the preview device / Simulator.
     WeekSchedulePreviewHost(scenario: .threeConflicts)
-        .environment(\.accessibilityReduceMotion, true)
-        .environment(\.colorSchemeContrast, .increased)
 }
 #endif

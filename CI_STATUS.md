@@ -4,8 +4,9 @@ Last local Windows structural validation: **2026-09-23 — Passed** (project gen
 
 | Gate | Status |
 | --- | --- |
-| CI preflight / structure | Passed (run #2) |
-| macOS build | Failed (run #2; duplicate Swift filename) |
+| CI preflight / structure | Passed (run #3) |
+| macOS build | Failed (run #3; writes to read-only Preview environment values) |
+| Core tests | Not run |
 | XCTest | Not run |
 | Simulator | Not run |
 | Real device | Not run |
@@ -17,7 +18,9 @@ The pre-build Python architecture check failed because it matched `EventKit` in 
 Runner: macOS 26.6.2, Xcode 26.6 (17F113), Apple Swift 6.3.3. No Simulator was selected before the failure.
 Fix committed in `57e76c4`: inspect code with comments/strings removed; architecture assertions and all XCTest methods retained.
 
-Latest inspected: [iOS CI #2](https://github.com/THE-GOD-ZERO/ClassFlow/actions/runs/35875755235), SHA `0e25f38ad7ae1d3981870fe1c4e04690b501cb03`, matched remote main when inspected. Preflight, Python validation and plist checks passed. Generic Simulator build failed at SwiftDriver: both Services/Week and Views/Schedule supplied `WeekSchedulePreviewData.swift` to the App module. Repeated arm64/x86_64 errors have the same root cause.
+Previous: [iOS CI #2](https://github.com/THE-GOD-ZERO/ClassFlow/actions/runs/35875755235), SHA `0e25f38ad7ae1d3981870fe1c4e04690b501cb03`. Preflight passed; generic Simulator build failed on duplicate `WeekSchedulePreviewData.swift` filenames. Fixed in `c1f18d5` by renaming only the View fixture and regenerating references, with a per-module filename guard.
+
+Latest inspected: [iOS CI #3](https://github.com/THE-GOD-ZERO/ClassFlow/actions/runs/35876514737), SHA `c1f18d5822b1df357ab93e80d9395fc66975c938`, matched latest remote main when inspected. Full job log retrieved (1,449 lines). Preflight passed and duplicate filename errors are gone. Generic build failed first at `CoursesPreviewData.swift:87`: `.environment` requires a writable key path, but `accessibilityReduceMotion` and `colorSchemeContrast` are read-only. The same misuse occurs in `WeekSchedulePreviews.swift`; `.increased` inference errors are consequential. Xcode also warned that `previewDevice` is ignored inside `#Preview`.
 Core tests, Simulator selection and XCTest were not reached; Executed/Passed/Failed/Skipped test counts are unavailable (workflow-step skips are not skipped XCTest cases).
-Pending revalidation: renamed only the View preview file to `WeekSchedulePreviews.swift`, regenerated the project, updated the preview inventory path, and added a per-module duplicate Swift filename guard. The guard reproduced the failure before the rename; all Windows structural checks passed afterwards. Preview contents, 193 XCTest methods, deployment target, Schema and Resolver are unchanged. The fix still needs a new macOS CI run.
+Pending revalidation: accessibility Preview scenes now inherit system settings instead of attempting invalid writes; the small-screen Preview uses `fixedLayout` traits. Added a source guard that reproduced the original error before repair; all Windows structural checks pass afterwards. Production accessibility behavior, 193 XCTest methods, iOS 17 target, Schema and Resolver are unchanged. Agent Git authentication remains unavailable; the owner must push the local repair commit to trigger its first macOS validation.
 Windows structural checks are not Swift compilation or runtime validation.

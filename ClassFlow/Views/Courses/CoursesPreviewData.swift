@@ -83,7 +83,9 @@ private struct WeekSelectorPreviewHost: View {
 #Preview("Courses · 最大字体") { CoursesPreviewHost(longText: true).environment(\.dynamicTypeSize, .accessibility5) }
 #Preview("Editor · 最大字体") { CoursesPreviewHost(longText: true, mode: "edit").environment(\.dynamicTypeSize, .accessibility5) }
 #Preview("教学周 · 最大字体") { WeekSelectorPreviewHost(weeks: [1, 3]).environment(\.dynamicTypeSize, .accessibility5) }
-#Preview("Reduce Motion · 高对比") {
-    CoursesPreviewHost().environment(\.accessibilityReduceMotion, true).environment(\.colorSchemeContrast, .increased)
+#Preview("辅助功能 · 跟随系统设置") {
+    // These system environment values are read-only. Enable Reduce Motion and
+    // Increase Contrast on the preview device / Simulator to review this scene.
+    CoursesPreviewHost()
 }
 #endif
