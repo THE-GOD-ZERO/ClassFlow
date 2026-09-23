@@ -48,7 +48,7 @@ const bestEffortSteps = workflow.split(/(?=      - name:)/).filter(step => step.
 if (bestEffortSteps.length !== 1 || !bestEffortSteps[0].includes('id: artifacts') ||
     !bestEffortSteps[0].includes('uses: actions/upload-artifact@')) throw new Error('Only artifact upload may be best-effort');
 if (/iPhone\s+(?:1[5-9]|2[0-9])/.test(workflow)) throw new Error('CI hard-codes a simulator model');
-if ((read('ClassFlow/Views/Schedule/WeekSchedulePreviewData.swift').match(/#Preview\(/g) ?? []).length < 13) {
+if ((read('ClassFlow/Views/Schedule/WeekSchedulePreviews.swift').match(/#Preview\(/g) ?? []).length < 13) {
   throw new Error('Schedule preview coverage is incomplete');
 }
 const scheduleView = read('ClassFlow/Views/Schedule/WeekScheduleView.swift')

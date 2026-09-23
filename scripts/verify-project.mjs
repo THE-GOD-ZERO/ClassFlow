@@ -43,16 +43,26 @@ for(const [id,object] of Object.entries(objects)) {
 }
 const targets=Object.entries(objects).filter(([,o])=>o.isa==='PBXNativeTarget');
 assert.deepEqual(targets.map(([,o])=>o.name).sort(),['ClassFlow','ClassFlowTests']);
+function assertUniqueSwiftFilenames(files, module) {
+  const filenames = new Map();
+  for (const file of files) {
+    const name = path.basename(file).toLowerCase();
+    assert(!filenames.has(name), `${module}: duplicate Swift filename: ${filenames.get(name)} and ${file}`);
+    filenames.set(name, file);
+  }
+}
 for(const [,target] of targets) {
   const phase=target.buildPhases.map(id=>objects[id]).find(o=>o.isa==='PBXSourcesBuildPhase');
   const actual=phase.files.map(id=>objects[objects[id].fileRef].path).sort();
   const expected=(target.name==='ClassFlow'?walk('ClassFlow').filter(p=>!p.startsWith('ClassFlow/Core/')):walk('Tests')).filter(p=>p.endsWith('.swift')).sort();
   assert.deepEqual(actual,expected,`${target.name} source membership mismatch`);
+  assertUniqueSwiftFilenames(actual, target.name);
   assert.equal(target.packageProductDependencies.length,1);
   assert.equal(objects[target.packageProductDependencies[0]].productName,'ClassFlowCore');
   console.log(`PASS: ${target.name}: ${actual.length} Swift source files in the correct target.`);
 }
 assert(read('Package.swift').includes('path: "ClassFlow/Core"'));
+assertUniqueSwiftFilenames(walk('ClassFlow/Core').filter(p=>p.endsWith('.swift')), 'ClassFlowCore');
 assert.equal(Object.values(objects).find(o=>o.isa==='XCLocalSwiftPackageReference').relativePath,'.');
 const scheme=read('ClassFlow.xcodeproj/xcshareddata/xcschemes/ClassFlow.xcscheme');
 for(const [,id] of scheme.matchAll(/BlueprintIdentifier="([A-F0-9]+)"/g))assert.equal(objects[id]?.isa,'PBXNativeTarget');
