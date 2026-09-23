@@ -116,7 +116,8 @@ for file in swift_files:
     assert not stack, (file, stack)
     assert not re.search(r"\b(?:fatalError|try!|as!)", stripped), file
     if "Views" in file.parts:
-        assert "EventKit" not in source and "ScheduleResolver(" not in source, file
+        # Check executable source, not comments describing Preview isolation or UI copy.
+        assert "EventKit" not in stripped and "ScheduleResolver(" not in stripped, file
     if "Core" in file.parts:
         assert not re.search(r"import (SwiftUI|SwiftData|EventKit)", source), file
 
